@@ -1,7 +1,7 @@
-=== Dynacat – Dynamic Category Filter ===
+=== Dynacat - Dynamic Category Filter ===
 Contributors: StuckOn_dev
 Tags: Category, dynamic list
-Requires at least: 3.5.1
+Requires at least: 3.6
 Tested up to: 6.7.2
 Stable tag: 1.2
 License: GPLv2 or later

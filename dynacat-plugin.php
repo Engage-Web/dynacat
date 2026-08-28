@@ -33,8 +33,8 @@ function dynacat_ajax_check_cat() {
 	}
 
 	$categories = get_terms(
-		'category',
 		array(
+			'taxonomy'   => 'category',
 			'hide_empty' => false,
 			'name__like' => $query,
 			'number'     => 30,
