@@ -1,0 +1,16 @@
+#result ul,li{
+  list-style:none;
+}
+#result li{
+  border-top: 1px solid lightgrey;
+  border-bottom: 1px solid lightgrey;
+  margin:0;
+  padding:2px;
+}
+#result li a {
+    display: block;
+    padding: 3px;
+}
+#result li a:hover{
+  background-color:#f2f2f2;
+}
