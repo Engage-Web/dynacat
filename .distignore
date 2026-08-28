@@ -2,3 +2,7 @@
 .github
 .gitignore
 .distignore
+.wp-env.json
+package.json
+playwright.config.js
+tests
