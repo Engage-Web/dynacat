@@ -4,7 +4,7 @@ Plugin Name: Dynacat - Dynamic Category Filter
 Plugin URI: 
 Description: Dynamic filtering of Categories
 Author: Engage Web - Steven Morris
-Version: 1.1
+Version: 1.2
 Author URI: http://www.engageweb.co.uk/about-us/meet-the-team#Steven
 License: GPL2
 */
