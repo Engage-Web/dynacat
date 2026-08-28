@@ -1,4 +1,4 @@
-=== Plugin Name ===
+=== Dynacat – Dynamic Category Filter ===
 Contributors: StuckOn_dev
 Tags: Category, dynamic list
 Requires at least: 3.5.1
