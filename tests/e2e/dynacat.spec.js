@@ -19,6 +19,22 @@ function createdId( output ) {
 	return Number( match[ 1 ] );
 }
 
+async function dismissEditorModal( page ) {
+	const overlay = page.locator( '.components-modal__screen-overlay' ).first();
+
+	if ( await overlay.count() ) {
+		const closeButton = overlay.getByRole( 'button', { name: /close/i } ).first();
+
+		if ( await closeButton.count() ) {
+			await closeButton.click();
+		} else {
+			await page.keyboard.press( 'Escape' );
+		}
+
+		await expect( overlay ).toBeHidden();
+	}
+}
+
 test( 'searches for and retains a selected category', async ( { page } ) => {
 	test.setTimeout( 90_000 );
 	const suffix = Date.now();
@@ -57,6 +73,7 @@ test( 'searches for and retains a selected category', async ( { page } ) => {
 	await page.getByLabel( 'Password', { exact: true } ).fill( 'password' );
 	await page.getByRole( 'button', { name: 'Log In' } ).click();
 	await page.goto( `/wp-admin/post.php?post=${ postId }&action=edit` );
+	await dismissEditorModal( page );
 
 	const search = page.locator( '#categorydiv #filbox' );
 	await expect( search ).toBeVisible();
