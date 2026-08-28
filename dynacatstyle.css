@@ -7,10 +7,16 @@
   margin:0;
   padding:2px;
 }
-#result li a {
+#result li .catlink {
     display: block;
+    width: 100%;
+    border: 0;
+    background: transparent;
+    color: #2271b1;
+    text-align: left;
     padding: 3px;
+    cursor: pointer;
 }
-#result li a:hover{
+#result li .catlink:hover{
   background-color:#f2f2f2;
 }

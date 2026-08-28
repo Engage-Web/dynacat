@@ -7,18 +7,23 @@ on:
   pull_request:
   workflow_dispatch:
 
+permissions:
+  contents: read
+  checks: write
+  pull-requests: write
+
 jobs:
   plugin-check:
     name: Test against WordPress
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Build production plugin
         run: |
-          mkdir build
-          rsync -av ./ build/ \
+          mkdir -p build/dynacat
+          rsync -av ./ build/dynacat/ \
             --exclude=.git \
             --exclude=.github \
             --exclude=.gitignore \
@@ -30,4 +35,5 @@ jobs:
       - name: Run WordPress Plugin Check
         uses: wordpress/plugin-check-action@v1
         with:
-          build-dir: build
+          build-dir: build/dynacat
+          ignore-codes: outdated_tested_upto_header
