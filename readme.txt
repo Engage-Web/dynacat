@@ -2,8 +2,8 @@
 Contributors: StuckOn_dev
 Tags: Category, dynamic list
 Requires at least: 4.5
-Tested up to: 6.7.2
-Stable tag: 1.2
+Tested up to: 7.1
+Stable tag: 1.3
 License: GPLv2 or later
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
 
@@ -45,6 +45,9 @@ This is exactly what this plugin was designed for. As you type, the categories a
 1. The Dynacat box in the right sidebar of a post edit screen.
 
 == Changelog ==
+
+= 1.3 =
+* Automated compatibility, security and maintenance release.
 
 = 1.0 =
 * n/a
