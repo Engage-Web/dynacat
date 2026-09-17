@@ -3,6 +3,11 @@
 .gitignore
 .distignore
 .wp-env.json
+AGENTS.md
 package.json
+package-lock.json
 playwright.config.js
+node_modules
 tests
+playwright-report
+test-results
