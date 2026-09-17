@@ -3,7 +3,7 @@ Contributors: StuckOn_dev
 Tags: Category, dynamic list
 Requires at least: 4.5
 Tested up to: 7.1
-Stable tag: 1.32
+Stable tag: 1.33
 License: GPLv2 or later
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
 
@@ -45,6 +45,9 @@ This is exactly what this plugin was designed for. As you type, the categories a
 1. The Dynacat box in the right sidebar of a post edit screen.
 
 == Changelog ==
+
+= 1.33 =
+* Prevent branch-based maintenance runs from creating invalid WordPress.org SVN tag paths.
 
 = 1.32 =
 * Exclude development and hidden files from packages checked for release.
