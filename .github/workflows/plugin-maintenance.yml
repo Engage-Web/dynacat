@@ -157,11 +157,18 @@ jobs:
           set -euo pipefail
           mkdir -p wordpress-svn
           svn checkout https://plugins.svn.wordpress.org/dynacat/trunk wordpress-svn/trunk
+
+          # Remove the previously published dependency tree while it still exists
+          # in the working copy. Removing it with rsync first makes Subversion walk
+          # thousands of individually missing paths and can leave `svn rm` with a
+          # non-zero exit status even after it has scheduled the deletions.
+          if svn info wordpress-svn/trunk/node_modules >/dev/null 2>&1; then
+            svn rm --force --quiet wordpress-svn/trunk/node_modules
+          fi
+
           rsync -av --delete --exclude=.svn build/dynacat/ wordpress-svn/trunk/
 
-          # rsync removes obsolete files from disk, but Subversion requires tracked
-          # files (including any previously published node_modules files) to be
-          # explicitly scheduled for deletion before they disappear upstream.
+          # Schedule any other obsolete tracked files removed by rsync.
           mapfile -t missing_paths < <(svn status wordpress-svn/trunk | sed -n 's/^!       //p')
           for path in "${missing_paths[@]}"; do
             svn rm --force "$path"
