@@ -12,4 +12,6 @@ tests
 playwright-report
 test-results
 build
+docs
+scripts
 codex-repair.patch

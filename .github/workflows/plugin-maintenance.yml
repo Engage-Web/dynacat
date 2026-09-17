@@ -2,18 +2,57 @@ name: Engage Web Plugin Maintenance
 
 on:
   workflow_dispatch:
+    inputs:
+      release_version:
+        description: New plugin version (for example, 1.34)
+        required: true
+        type: string
+      confirm_release:
+        description: Test, version, tag, and deploy this release to WordPress.org
+        required: true
+        type: boolean
+        default: false
 
 permissions:
   contents: write
 
+concurrency:
+  group: dynacat-wordpress-org-release
+  cancel-in-progress: false
+
 jobs:
   check-and-release:
     name: Check and prepare release
+    if: github.ref == 'refs/heads/main' && inputs.confirm_release
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout plugin
         uses: actions/checkout@v6
+
+      - name: Validate new release version
+        env:
+          RELEASE_VERSION: ${{ inputs.release_version }}
+          SVN_USERNAME: ${{ secrets.SVN_USERNAME }}
+          SVN_PASSWORD: ${{ secrets.SVN_PASSWORD }}
+        shell: bash
+        run: |
+          if [[ -z "$SVN_USERNAME" || -z "$SVN_PASSWORD" ]]; then
+            echo "SVN_USERNAME and SVN_PASSWORD secrets are required." >&2
+            exit 1
+          fi
+          if [[ ! "$RELEASE_VERSION" =~ ^[0-9]+\.[0-9]+(\.[0-9]+)?$ ]]; then
+            echo "Release version must contain two or three numeric components." >&2
+            exit 1
+          fi
+          if git ls-remote --exit-code --tags origin "refs/tags/${RELEASE_VERSION}" >/dev/null 2>&1; then
+            echo "Git tag ${RELEASE_VERSION} already exists." >&2
+            exit 1
+          fi
+          if svn info "https://plugins.svn.wordpress.org/dynacat/tags/${RELEASE_VERSION}" >/dev/null 2>&1; then
+            echo "WordPress.org tag ${RELEASE_VERSION} already exists." >&2
+            exit 1
+          fi
 
       - name: Set up Node.js
         uses: actions/setup-node@v6
@@ -33,9 +72,28 @@ jobs:
       - name: Run WordPress plugin tests
         run: npm test
 
+      - name: Read tested WordPress version
+        id: wordpress
+        shell: bash
+        run: |
+          output="$(npm exec wp-env run cli -- wp core version 2>&1)"
+          printf '%s\n' "$output"
+          version="$(printf '%s\n' "$output" | grep -E '^[0-9]+\.[0-9]+(\.[0-9]+)?$' | tail -1)"
+          if [[ -z "$version" ]]; then
+            echo "Could not determine the tested WordPress version." >&2
+            exit 1
+          fi
+          echo "version=$(cut -d. -f1-2 <<< "$version")" >> "$GITHUB_OUTPUT"
+
       - name: Stop WordPress
         if: always()
         run: npm run env:stop
+
+      - name: Update release metadata
+        env:
+          RELEASE_VERSION: ${{ inputs.release_version }}
+          TESTED_UP_TO: ${{ steps.wordpress.outputs.version }}
+        run: php scripts/prepare-release.php "$RELEASE_VERSION" "$TESTED_UP_TO"
 
       - name: Build clean WordPress.org package
         run: |
@@ -49,16 +107,48 @@ jobs:
         with:
           build-dir: build/dynacat
 
+      - name: Create installable plugin ZIP
+        run: |
+          cd build
+          zip -r dynacat.zip dynacat
+
+      - name: Upload installable plugin ZIP
+        uses: actions/upload-artifact@v6
+        with:
+          name: dynacat-plugin-${{ github.sha }}
+          path: build/dynacat.zip
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Commit and tag tested release
+        env:
+          RELEASE_VERSION: ${{ inputs.release_version }}
+        run: |
+          git config user.name "Engage Web Plugin Bot"
+          git config user.email "plugins@engageweb.co.uk"
+          git add dynacat-plugin.php readme.txt
+          git commit -m "Release DynaCat ${RELEASE_VERSION}"
+          git tag -a "$RELEASE_VERSION" -m "DynaCat ${RELEASE_VERSION}"
+          git push --atomic origin HEAD:main "refs/tags/${RELEASE_VERSION}"
+
       - name: Deploy to WordPress.org
-        if: startsWith(github.ref, 'refs/tags/')
-        uses: 10up/action-wordpress-plugin-deploy@stable
         env:
           SVN_USERNAME: ${{ secrets.SVN_USERNAME }}
           SVN_PASSWORD: ${{ secrets.SVN_PASSWORD }}
-          SLUG: dynacat
-
-      - name: Explain skipped deployment
-        if: ${{ !startsWith(github.ref, 'refs/tags/') }}
+          RELEASE_VERSION: ${{ inputs.release_version }}
+        shell: bash
         run: |
-          echo "WordPress.org deployment is skipped for ${GITHUB_REF}."
-          echo "Run this workflow from an approved release tag to deploy."
+          svn checkout --depth immediates https://plugins.svn.wordpress.org/dynacat/ wordpress-svn
+          svn update --set-depth infinity wordpress-svn/trunk
+          rsync -av --delete --exclude=.svn build/dynacat/ wordpress-svn/trunk/
+          if svn info "https://plugins.svn.wordpress.org/dynacat/tags/${RELEASE_VERSION}" >/dev/null 2>&1; then
+            echo "WordPress.org tag ${RELEASE_VERSION} already exists." >&2
+            exit 1
+          fi
+          svn copy wordpress-svn/trunk "wordpress-svn/tags/${RELEASE_VERSION}"
+          svn commit wordpress-svn \
+            --username "$SVN_USERNAME" \
+            --password "$SVN_PASSWORD" \
+            --non-interactive \
+            --no-auth-cache \
+            -m "Release ${RELEASE_VERSION}"
