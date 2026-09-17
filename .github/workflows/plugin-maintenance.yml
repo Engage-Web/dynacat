@@ -94,11 +94,18 @@ jobs:
         if: always()
         run: npm run env:stop
 
-      - name: Update release metadata
+      - name: Update release metadata from tested WordPress version
         env:
           RELEASE_VERSION: ${{ inputs.release_version }}
           TESTED_UP_TO: ${{ steps.wordpress.outputs.version }}
-        run: php scripts/prepare-release.php "$RELEASE_VERSION" "$TESTED_UP_TO"
+        shell: bash
+        run: |
+          php scripts/prepare-release.php "$RELEASE_VERSION" "$TESTED_UP_TO"
+          actual_tested_up_to="$(sed -n 's/^Tested up to: //p' readme.txt)"
+          if [[ "$actual_tested_up_to" != "$TESTED_UP_TO" ]]; then
+            echo "Expected Tested up to: ${TESTED_UP_TO}; found ${actual_tested_up_to}." >&2
+            exit 1
+          fi
 
       - name: Build clean WordPress.org package
         run: |
@@ -106,6 +113,10 @@ jobs:
           mkdir -p build/dynacat
           rsync -av ./ build/dynacat/ \
             --exclude-from=.distignore
+          if find build/dynacat -type d -name node_modules -print -quit | grep -q .; then
+            echo "node_modules must not be present in the WordPress.org package." >&2
+            exit 1
+          fi
 
       - name: Run WordPress Plugin Check
         uses: wordpress/plugin-check-action@v1
@@ -146,6 +157,19 @@ jobs:
           svn checkout --depth immediates https://plugins.svn.wordpress.org/dynacat/ wordpress-svn
           svn update --set-depth infinity wordpress-svn/trunk
           rsync -av --delete --exclude=.svn build/dynacat/ wordpress-svn/trunk/
+
+          # rsync removes obsolete files from disk, but Subversion requires tracked
+          # files (including any previously published node_modules files) to be
+          # explicitly scheduled for deletion before they disappear upstream.
+          svn status wordpress-svn/trunk | sed -n 's/^!       //p' | while IFS= read -r path; do
+            svn rm --force "$path"
+          done
+          svn add --force wordpress-svn/trunk
+
+          if find wordpress-svn/trunk -type d -name node_modules -print -quit | grep -q .; then
+            echo "node_modules must not be deployed to WordPress.org." >&2
+            exit 1
+          fi
           if svn info "https://plugins.svn.wordpress.org/dynacat/tags/${RELEASE_VERSION}" >/dev/null 2>&1; then
             echo "WordPress.org tag ${RELEASE_VERSION} already exists." >&2
             exit 1
