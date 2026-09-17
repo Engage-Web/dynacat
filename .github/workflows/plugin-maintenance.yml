@@ -1,5 +1,53 @@
 name: Engage Web Plugin Maintenance
-
+# ## What It Does
+#
+# The **Engage Web Plugin Maintenance** workflow is a manual release workflow for DynaCat. It only runs the release job when it is started from the `main` branch and **Confirm release** is enabled. It has write permission because it commits release metadata and creates a Git tag. Concurrent releases are serialized rather than cancelled.
+#
+# ## Before Running It
+#
+# 1. Make sure all intended release changes have already been reviewed and merged into `main`.
+# 2. Make sure the release is ready to be published; this workflow does not create a review pull request.
+# 3. Choose a new version containing two or three numeric components, such as `1.34` or `1.34.1`.
+# 4. Configure the `SVN_USERNAME` and `SVN_PASSWORD` GitHub Actions secrets with credentials that can publish the `dynacat` plugin to WordPress.org. The workflow stops if either secret is missing.
+# 5. Ensure GitHub Actions has permission to push commits and tags to `main`, including permission under any branch-protection rules.
+#
+# ## How to Run It
+#
+# 1. Open the repository on GitHub.
+# 2. Select **Actions**.
+# 3. Select **Engage Web Plugin Maintenance**.
+# 4. Select **Run workflow**.
+# 5. Choose the `main` branch.
+# 6. Enter the new version in **New plugin version**, for example `1.34` or `1.34.1`.
+# 7. Enable **Test, version, tag, and deploy this release to WordPress.org**.
+# 8. Select **Run workflow** and monitor every step until it completes.
+#
+# Leaving the confirmation option disabled causes the release job to be skipped. Running it from a branch other than `main` also causes the job to be skipped.
+#
+# ## What Happens During a Release
+#
+# 1. The workflow checks out the repository and installs Subversion.
+# 2. It verifies that the WordPress.org credentials exist, validates the version format, and refuses to continue if the corresponding Git or WordPress.org tag already exists.
+# 3. It installs Node.js 24, the locked npm dependencies, and Chromium for Playwright.
+# 4. It starts the latest stable WordPress test environment and runs the Playwright test suite. The npm scripts use `wp-env` for WordPress and Playwright for the tests.
+# 5. It reads the actual WordPress version used by the test environment and records its major/minor version for the `Tested up to` metadata.
+# 6. It stops the WordPress environment even if an earlier test step failed.
+# 7. After successful tests, it updates the plugin header version, the readme stable tag, the tested WordPress version, and the changelog. It also rejects a release version that is not newer than the current plugin version.
+# 8. It builds a clean distribution in `build/dynacat`, excluding development files listed in `.distignore`, and explicitly checks that `node_modules` is absent.
+# 9. It runs the official WordPress Plugin Check action against that distribution.
+# 10. It creates an installable `dynacat.zip` and uploads it as a GitHub Actions artifact retained for 14 days.
+# 11. It commits the updated `dynacat-plugin.php` and `readme.txt` files directly to `main`, creates an annotated Git tag matching the release version, and atomically pushes the commit and tag.
+# 12. It checks out the WordPress.org SVN trunk, removes obsolete files, copies in the clean package, confirms that `node_modules` is absent, commits the new trunk contents, and creates the corresponding WordPress.org SVN tag.
+#
+# ## Important Operational Notes
+#
+# - Enabling the confirmation option is a real publication action: it updates `main`, creates a Git tag, and deploys to WordPress.org.
+# - Do not run the workflow merely to preview a build or execute tests.
+# - Do not reuse a version number. Existing Git and WordPress.org tags cause validation to fail before testing or publication begins.
+# - If a step fails before the commit-and-tag step, no release commit or Git tag is pushed.
+# - The WordPress.org deployment occurs after the Git commit and tag are pushed. Therefore, if SVN deployment fails, the GitHub release commit and tag may already exist; inspect the failed run and repair the deployment rather than immediately rerunning with the same version.
+# - A successful run should finish with both the updated WordPress.org trunk and a WordPress.org tag matching the supplied release version.
+# - The workflow does not create a GitHub Release object; it creates and pushes an annotated Git tag.
 on:
   workflow_dispatch:
     inputs:
