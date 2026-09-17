@@ -53,10 +53,12 @@ new version tag to the WordPress.org SVN repository. The deployment checks out
 from the committed remote trunk. This avoids depending on a sparse local
 checkout when creating the release tag. The package and deployment steps reject
 any `node_modules` directory. During deployment, files removed from the clean
-package are also scheduled for deletion in Subversion, so development
-dependencies left by an older release are removed from WordPress.org. Any
-failure stops later steps, so a failed compatibility test cannot update metadata
-or deploy.
+package are also scheduled for deletion in Subversion. A legacy `node_modules`
+tree is scheduled for deletion before package synchronization, while it still
+exists in the working copy, so Subversion can remove the directory as one tree
+instead of failing while processing thousands of individually missing paths.
+Any failure stops later steps, so a failed compatibility test cannot update
+metadata or deploy.
 
 The workflow only runs its release job from `main`, and the confirmation checkbox
 must be selected. It cannot be used as a check-only workflow.
