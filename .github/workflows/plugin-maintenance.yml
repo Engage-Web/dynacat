@@ -30,6 +30,11 @@ jobs:
       - name: Checkout plugin
         uses: actions/checkout@v6
 
+      - name: Install Subversion
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes subversion
+
       - name: Validate new release version
         env:
           RELEASE_VERSION: ${{ inputs.release_version }}
