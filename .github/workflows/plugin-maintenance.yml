@@ -154,14 +154,16 @@ jobs:
           RELEASE_VERSION: ${{ inputs.release_version }}
         shell: bash
         run: |
-          svn checkout --depth immediates https://plugins.svn.wordpress.org/dynacat/ wordpress-svn
-          svn update --set-depth infinity wordpress-svn/trunk
+          set -euo pipefail
+          mkdir -p wordpress-svn
+          svn checkout https://plugins.svn.wordpress.org/dynacat/trunk wordpress-svn/trunk
           rsync -av --delete --exclude=.svn build/dynacat/ wordpress-svn/trunk/
 
           # rsync removes obsolete files from disk, but Subversion requires tracked
           # files (including any previously published node_modules files) to be
           # explicitly scheduled for deletion before they disappear upstream.
-          svn status wordpress-svn/trunk | sed -n 's/^!       //p' | while IFS= read -r path; do
+          mapfile -t missing_paths < <(svn status wordpress-svn/trunk | sed -n 's/^!       //p')
+          for path in "${missing_paths[@]}"; do
             svn rm --force "$path"
           done
           svn add --force wordpress-svn/trunk
@@ -174,10 +176,17 @@ jobs:
             echo "WordPress.org tag ${RELEASE_VERSION} already exists." >&2
             exit 1
           fi
-          svn copy wordpress-svn/trunk "wordpress-svn/tags/${RELEASE_VERSION}"
-          svn commit wordpress-svn \
+          svn commit wordpress-svn/trunk \
             --username "$SVN_USERNAME" \
             --password "$SVN_PASSWORD" \
             --non-interactive \
             --no-auth-cache \
-            -m "Release ${RELEASE_VERSION}"
+            -m "Update trunk for ${RELEASE_VERSION}"
+          svn copy \
+            "https://plugins.svn.wordpress.org/dynacat/trunk" \
+            "https://plugins.svn.wordpress.org/dynacat/tags/${RELEASE_VERSION}" \
+            --username "$SVN_USERNAME" \
+            --password "$SVN_PASSWORD" \
+            --non-interactive \
+            --no-auth-cache \
+            -m "Tag ${RELEASE_VERSION}"
