@@ -4,6 +4,7 @@
   "scripts": {
     "env:start": "wp-env start",
     "env:stop": "wp-env stop",
+    "test": "playwright test",
     "test:e2e": "playwright test"
   },
   "devDependencies": {

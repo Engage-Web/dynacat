@@ -4,7 +4,7 @@
  * Plugin URI:
  * Description: Dynamic filtering of Categories
  * Author: Engage Web - Steven Morris
- * Version: 1.3
+ * Version: 1.31
  * Author URI: https://www.engageweb.co.uk/about-us/meet-the-team#Steven
  * License: GPL2
  * Text Domain: dynacat
