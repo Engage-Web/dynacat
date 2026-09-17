@@ -131,19 +131,7 @@ jobs:
         run: |
           mkdir -p build/dynacat
           rsync -av ./ build/dynacat/ \
-            --exclude=.git \
-            --exclude=.github \
-            --exclude=.gitignore \
-            --exclude=.distignore \
-            --exclude=.wp-env.json \
-            --exclude=AGENTS.md \
-            --exclude=build \
-            --exclude=node_modules \
-            --exclude=playwright-report \
-            --exclude=test-results \
-            --exclude=tests \
-            --exclude=package.json \
-            --exclude=playwright.config.js
+            --exclude-from=.distignore
 
       - name: Run WordPress Plugin Check
         uses: wordpress/plugin-check-action@v1

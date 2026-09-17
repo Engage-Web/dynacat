@@ -11,3 +11,5 @@ node_modules
 tests
 playwright-report
 test-results
+build
+codex-repair.patch
