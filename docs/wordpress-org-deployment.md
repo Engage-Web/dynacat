@@ -48,9 +48,12 @@ a changelog entry.
 The updated package then passes WordPress Plugin Check. The workflow creates
 `dynacat.zip` and uploads it as an artifact retained for 14 days, commits the
 metadata to `main`, creates the matching Git tag, and publishes `trunk` plus the
-new version tag to the WordPress.org SVN repository. The package and deployment
-steps reject any `node_modules` directory. During deployment, files removed from
-the clean package are also scheduled for deletion in Subversion, so development
+new version tag to the WordPress.org SVN repository. The deployment checks out
+`trunk` directly, commits its synchronized contents, and then creates the tag
+from the committed remote trunk. This avoids depending on a sparse local
+checkout when creating the release tag. The package and deployment steps reject
+any `node_modules` directory. During deployment, files removed from the clean
+package are also scheduled for deletion in Subversion, so development
 dependencies left by an older release are removed from WordPress.org. Any
 failure stops later steps, so a failed compatibility test cannot update metadata
 or deploy.
