@@ -1,150 +1,45 @@
-name: Auto Release to WordPress.org
+name: Release DynaCat to WordPress.org
 
 on:
-  workflow_run:
-    workflows:
-      - Test WordPress Plugin
-    types:
-      - completed
+  workflow_dispatch:
 
 permissions:
   contents: write
 
 jobs:
   release:
-    if: >
-      github.event.workflow_run.conclusion == 'success' &&
-      github.event.workflow_run.head_branch == 'main'
     runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v6
         with:
-          ref: ${{ github.event.workflow_run.head_sha }}
           fetch-depth: 0
 
-      - name: Fetch release tags
-        run: git fetch --tags --force
-
-      - name: Check for unreleased production changes
-        id: changes
-        shell: bash
+      - name: Build clean WordPress.org package
         run: |
-          last_tag="$(git tag --list '[0-9]*' --sort=-v:refname | head -n 1)"
-          if [[ -z "$last_tag" ]]; then
-            echo "release=true" >> "$GITHUB_OUTPUT"
-            echo "last_tag=" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
+          mkdir -p build/dynacat
+          rsync -av ./ build/dynacat/ \
+            --exclude=.git \
+            --exclude=.github \
+            --exclude=node_modules \
+            --exclude=tests \
+            --exclude=test-results \
+            --exclude=playwright-report \
+            --exclude=package.json \
+            --exclude=package-lock.json \
+            --exclude=playwright.config.js \
+            --exclude=AGENTS.md \
+            --exclude=build
 
-          changed="$(git diff --name-only "$last_tag"..HEAD --             dynacat-plugin.php dynacat.js dynacatstyle.css ajax-loader.gif dynacat.gif)"
-
-          if [[ -n "$changed" ]]; then
-            echo "release=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "release=false" >> "$GITHUB_OUTPUT"
-          fi
-          echo "last_tag=$last_tag" >> "$GITHUB_OUTPUT"
-
-      - uses: actions/setup-node@v6
-        if: steps.changes.outputs.release == 'true'
+      - name: Run WordPress Plugin Check
+        uses: wordpress/plugin-check-action@v1
         with:
-          node-version: 24
+          build-dir: build/dynacat
+          ignore-codes: outdated_tested_upto_header
 
-      - name: Start latest stable WordPress
-        if: steps.changes.outputs.release == 'true'
-        run: |
-          npm install
-          npm run env:start
-
-      - name: Read tested WordPress version
-        if: steps.changes.outputs.release == 'true'
-        id: wp
-        shell: bash
-        run: |
-          version="$(npx wp-env run cli wp core version | tail -n 1 | tr -d '\r')"
-          echo "version=$version" >> "$GITHUB_OUTPUT"
-
-      - name: Stop WordPress
-        if: steps.changes.outputs.release == 'true'
-        run: npm run env:stop
-
-      - name: Prepare next patch release
-        if: steps.changes.outputs.release == 'true'
-        id: prepare
-        env:
-          TESTED_WP: ${{ steps.wp.outputs.version }}
-        shell: bash
-        run: |
-          python3 - <<'PY'
-          import os, re
-          from pathlib import Path
-
-          plugin = Path("dynacat-plugin.php")
-          readme = Path("readme.txt")
-
-          plugin_text = plugin.read_text()
-          readme_text = readme.read_text()
-
-          match = re.search(r"(\*\s*Version:\s*)(\d+\.\d+(?:\.\d+)?)", plugin_text)
-          if not match:
-              raise SystemExit("Could not find plugin Version header")
-
-          parts = [int(p) for p in match.group(2).split(".")]
-          if len(parts) == 2:
-              parts[1] += 1
-          else:
-              parts[2] += 1
-          new_version = ".".join(map(str, parts))
-
-          plugin_text = plugin_text[:match.start(2)] + new_version + plugin_text[match.end(2):]
-          readme_text = re.sub(r"(?m)^Stable tag:\s*.*$", f"Stable tag: {new_version}", readme_text)
-          readme_text = re.sub(r"(?m)^Tested up to:\s*.*$", f"Tested up to: {os.environ['TESTED_WP']}", readme_text)
-
-          changelog_heading = "== Changelog =="
-          entry = f"\n\n= {new_version} =\n* Automated compatibility, security and maintenance release."
-          if changelog_heading in readme_text and f"= {new_version} =" not in readme_text:
-              readme_text = readme_text.replace(changelog_heading, changelog_heading + entry, 1)
-
-          plugin.write_text(plugin_text)
-          readme.write_text(readme_text)
-
-          with open(os.environ["GITHUB_OUTPUT"], "a") as out:
-              out.write(f"version={new_version}\n")
-          PY
-
-      - name: Commit release metadata locally
-        if: steps.changes.outputs.release == 'true'
-        env:
-          VERSION: ${{ steps.prepare.outputs.version }}
-        run: |
-          git config user.name "Engage Web Plugin Bot"
-          git config user.email "plugins@engageweb.co.uk"
-          git add dynacat-plugin.php readme.txt
-          git commit -m "Prepare DynaCat ${VERSION} release"
-
-      - name: Deploy verified release to WordPress.org
-        if: steps.changes.outputs.release == 'true'
+      - name: Deploy to WordPress.org
         uses: 10up/action-wordpress-plugin-deploy@stable
         env:
           SVN_USERNAME: ${{ secrets.SVN_USERNAME }}
           SVN_PASSWORD: ${{ secrets.SVN_PASSWORD }}
           SLUG: dynacat
-          VERSION: ${{ steps.prepare.outputs.version }}
-
-      - name: Push release commit and tag
-        if: steps.changes.outputs.release == 'true'
-        env:
-          VERSION: ${{ steps.prepare.outputs.version }}
-        run: |
-          git tag "${VERSION}"
-          git push origin HEAD:main
-          git push origin "${VERSION}"
-
-      - name: Create GitHub release
-        if: steps.changes.outputs.release == 'true'
-        env:
-          GH_TOKEN: ${{ github.token }}
-          VERSION: ${{ steps.prepare.outputs.version }}
-        run: |
-          gh release create "${VERSION}"             --title "${VERSION}"             --notes "Automated verified WordPress.org release."
