@@ -20,6 +20,7 @@ jobs:
         run: npm ci
 
       - name: Run WordPress plugin tests
+        if: hashFiles('package.json', 'package-lock.json') != ''
         run: npm test
 
       - name: Build clean WordPress.org package
