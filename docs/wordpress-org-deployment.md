@@ -1,8 +1,9 @@
 # Deploying DynaCat to WordPress.org
 
-GitHub is the source of truth for DynaCat. The maintenance workflow validates the
-plugin and only deploys when it is manually run against a Git tag. A run against
-a branch performs the checks but deliberately skips deployment.
+GitHub is the source of truth for DynaCat. The manually triggered maintenance
+workflow is a release workflow: it tests the plugin against the latest stable
+WordPress, updates the release metadata, creates a Git commit and tag, builds an
+installable ZIP, and deploys the same package to WordPress.org.
 
 ## One-time repository setup
 
@@ -12,48 +13,46 @@ a branch performs the checks but deliberately skips deployment.
    and add these repository secrets:
    - `SVN_USERNAME`: the WordPress.org username with commit access.
    - `SVN_PASSWORD`: that account's WordPress.org password.
-3. Keep the plugin slug as `dynacat`. The workflow passes this slug to the
-   WordPress.org deploy action.
+3. Keep the plugin slug as `dynacat`. The workflow publishes to that
+   WordPress.org SVN repository.
+4. Ensure GitHub Actions has permission to write repository contents and that
+   the `main` branch rules allow this workflow to push the generated release
+   commit and tag.
 
 Use a dedicated WordPress.org release account where possible. Never add either
 credential to the workflow file or commit it to Git.
 
 ## Prepare a release
 
-1. Make the release changes in a pull request and obtain approval.
-2. Update the `Version` header in `dynacat-plugin.php` and the `Stable tag` in
-   `readme.txt` to the same version.
-3. Add that version to the changelog. Only update `Tested up to` after testing
-   successfully against that WordPress version.
-4. Merge the approved pull request into the default branch.
-5. Create and push a Git tag matching the release version. For example, for
-   version `1.34`:
-
-   ```sh
-   git switch main
-   git pull --ff-only
-   git tag -a 1.34 -m "DynaCat 1.34"
-   git push origin 1.34
-   ```
-
-Pushing the tag does not deploy the plugin by itself. It makes the immutable
-release ref available for the explicitly triggered workflow.
+1. Make any plugin changes in a pull request, obtain approval, and merge them to
+   `main`.
+2. Choose the next plugin version. It must be greater than the current `Version`
+   and must not already exist as a Git or WordPress.org SVN tag.
+3. Do not edit `Version`, `Stable tag`, `Tested up to`, or the changelog manually;
+   the workflow updates them only after the compatibility tests pass.
 
 ## Validate and deploy
 
 1. Open **Actions → Engage Web Plugin Maintenance → Run workflow**.
-2. In the **Use workflow from** selector, choose the release tag, not `main` or
-   another branch.
-3. Select **Run workflow** and review every job result.
+2. Select `main` in **Use workflow from**.
+3. Enter the new plugin version in **New plugin version**.
+4. Select **Test, version, tag, and deploy this release to WordPress.org**.
+5. Select **Run workflow** and review every job result.
 
 The workflow installs the test dependencies, starts the latest stable WordPress,
-runs the functional tests, builds a clean package, and runs WordPress Plugin
-Check. Only after those steps pass does the WordPress.org deploy action run. It
-uses `.distignore` to keep development files out of the published plugin.
+runs the functional tests, and reads that installation's WordPress version. Once
+the tests pass, it sets `Version` and `Stable tag` to the requested plugin
+version, sets `Tested up to` to the tested WordPress major/minor version, and adds
+a changelog entry.
 
-If the workflow is run from a branch, the deployment step is skipped and the
-workflow prints an explanation. Re-run the workflow using the approved release
-tag when deployment is intended.
+The updated package then passes WordPress Plugin Check. The workflow creates
+`dynacat.zip` and uploads it as an artifact retained for 14 days, commits the
+metadata to `main`, creates the matching Git tag, and publishes `trunk` plus the
+new version tag to the WordPress.org SVN repository. Any failure stops later
+steps, so a failed compatibility test cannot update metadata or deploy.
+
+The workflow only runs its release job from `main`, and the confirmation checkbox
+must be selected. It cannot be used as a check-only workflow.
 
 ## Verify the release
 
