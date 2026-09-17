@@ -1,0 +1,51 @@
+name: Engage Web Plugin Maintenance
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  check-and-release:
+    name: Check and prepare release
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout plugin
+        uses: actions/checkout@v6
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run WordPress plugin tests
+        run: npm test
+
+      - name: Build clean WordPress.org package
+        run: |
+          rm -rf build/dynacat
+          mkdir -p build/dynacat
+          rsync -av ./ build/dynacat/ \
+            --exclude=.git \
+            --exclude=.github \
+            --exclude=node_modules \
+            --exclude=tests \
+            --exclude=test-results \
+            --exclude=playwright-report \
+            --exclude=package.json \
+            --exclude=package-lock.json \
+            --exclude=playwright.config.js \
+            --exclude=AGENTS.md \
+            --exclude=build
+
+      - name: Run WordPress Plugin Check
+        uses: wordpress/plugin-check-action@v1
+        with:
+          build-dir: build/dynacat
+
+      - name: Deploy to WordPress.org
+        uses: 10up/action-wordpress-plugin-deploy@stable
+        env:
+          SVN_USERNAME: ${{ secrets.SVN_USERNAME }}
+          SVN_PASSWORD: ${{ secrets.SVN_PASSWORD }}
+          SLUG: dynacat
