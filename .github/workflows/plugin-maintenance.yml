@@ -136,6 +136,9 @@ jobs:
       - name: Install test dependencies
         run: npm ci
 
+      - name: Install Playwright browser
+        run: npx playwright install --with-deps chromium
+
       - name: Start latest stable WordPress
         run: npm run env:start
 
