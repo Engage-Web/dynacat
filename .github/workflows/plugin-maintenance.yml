@@ -150,17 +150,22 @@ jobs:
         run: npm run env:stop
 
       - name: Build clean deployment package
+        id: package
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p build/package
-          rsync -a --delete-excluded --exclude-from=.distignore ./ build/package/
-          test ! -e build/package/node_modules
+          plugin_slug="$(sed -n 's/^ \* Text Domain: *//p' dynacat-plugin.php | head -1)"
+          [[ "$plugin_slug" =~ ^[a-z0-9-]+$ ]] || { echo '::error title=Invalid plugin slug::The plugin Text Domain must be a non-empty WordPress.org slug.'; exit 1; }
+          package_dir="build/$plugin_slug"
+          mkdir -p "$package_dir"
+          rsync -a --delete-excluded --exclude-from=.distignore ./ "$package_dir/"
+          test ! -e "$package_dir/node_modules"
+          echo "directory=$package_dir" >> "$GITHUB_OUTPUT"
 
       - name: Run WordPress Plugin Check
         uses: wordpress/plugin-check-action@v1
         with:
-          build-dir: build/package
+          build-dir: ${{ steps.package.outputs.directory }}
 
       - name: Deploy trunk and version tag to WordPress.org
         shell: bash
@@ -168,7 +173,7 @@ jobs:
           set -euo pipefail
           auth=(--username "$SVN_USERNAME" --password "$SVN_PASSWORD" --non-interactive --no-auth-cache)
           svn checkout "$SVN_URL/trunk" wordpress-svn/trunk "${auth[@]}"
-          rsync -a --delete --exclude=.svn/ build/package/ wordpress-svn/trunk/
+          rsync -a --delete --exclude=.svn/ "${{ steps.package.outputs.directory }}/" wordpress-svn/trunk/
           (
             cd wordpress-svn/trunk
             svn add --force . --auto-props --parents >/dev/null
