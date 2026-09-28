@@ -75,6 +75,17 @@ metadata or deploy.
 The workflow only runs its release job from `main`, and the confirmation checkbox
 must be selected. Its current-version preview does not publish anything.
 
+When confirmation is selected, the caller checks the requested version before it
+starts the shared release job. The version must have two or three numeric
+components and must be greater than the version currently in the plugin header.
+For example, after `1.40` has been released, rerun with `1.41` (or a later
+version), not `1.40`. This early check also prevents the shared workflow's
+always-run WordPress cleanup from producing a secondary `wp-env: not found`
+message when release validation stops the job before Node dependencies are
+installed. In older runs that show both errors, expand **Validate release** to
+find the primary failure; **Stop WordPress** is only a cleanup failure caused by
+the earlier validation failure.
+
 The release implementation remains in the central
 `Engage-Web/github-actions` repository. DynaCat supplies only its slug, plugin
 file, display name, requested version, and test profile. Other Engage Web plugin
