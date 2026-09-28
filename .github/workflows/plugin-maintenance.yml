@@ -114,6 +114,12 @@ jobs:
       - name: Checkout reviewed plugin
         uses: actions/checkout@v4
 
+      - name: Install Subversion client
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends subversion
+
       - name: Validate deployment inputs
         shell: bash
         run: |
