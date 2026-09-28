@@ -65,4 +65,9 @@ jobs:
       plugin_name: DynaCat
       release_version: ${{ inputs.release_version }}
       profile: dynacat
-    secrets: inherit
+    # Forward the repository credentials under the exact names declared by the
+    # reusable workflow. `inherit` can silently omit secrets when this caller or
+    # the reusable workflow is moved across an organisation boundary.
+    secrets:
+      SVN_USERNAME: ${{ secrets.SVN_USERNAME }}
+      SVN_PASSWORD: ${{ secrets.SVN_PASSWORD }}

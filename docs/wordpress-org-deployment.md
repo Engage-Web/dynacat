@@ -12,7 +12,7 @@ installable ZIP, and deploys the same package to WordPress.org.
 2. In the GitHub repository, open **Settings → Secrets and variables → Actions**
    and add these repository secrets:
    - `SVN_USERNAME`: the WordPress.org username with commit access.
-   - `SVN_PASSWORD`: that account's WordPress.org password.
+   - `SVN_PASSWORD`: that account's WordPress.org password (not a WordPress application password).
 3. Keep the plugin slug as `dynacat`. The workflow publishes to that
    WordPress.org SVN repository.
 4. Ensure GitHub Actions has permission to write repository contents and that
@@ -20,7 +20,11 @@ installable ZIP, and deploys the same package to WordPress.org.
    commit and tag.
 
 Use a dedicated WordPress.org release account where possible. Never add either
-credential to the workflow file or commit it to Git.
+credential to the workflow file or commit it to Git. These must be Actions
+repository or organisation secrets; secrets saved only for Codespaces,
+Dependabot, or a GitHub environment are not available to this reusable workflow.
+The caller explicitly maps both secret names to the shared release workflow so a
+missing or renamed credential cannot be obscured by blanket secret inheritance.
 
 ## Prepare a release
 
