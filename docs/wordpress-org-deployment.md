@@ -88,7 +88,12 @@ metadata or deploy.
 The messages `E215004: Authentication failed` and `E215004: No more
 credentials or we tried too many times` come from WordPress.org's SVN server.
 They mean that the deployment reached WordPress.org but it rejected the supplied
-credentials; rerunning the same values cannot repair the problem.
+credentials; rerunning the same values cannot repair the problem. In particular,
+the workflow's input validation only proves that both GitHub secrets are
+non-empty. A run that gets as far as `svn commit` has already proved that the
+checkout, package, and command construction work; `E215004` at that point is a
+credential or WordPress.org committer-access problem, not a missing workflow
+flag.
 
 1. Confirm that `SVN_USERNAME` is the WordPress.org **username**, not the
    account's email address or display name.
@@ -103,6 +108,11 @@ credentials; rerunning the same values cannot repair the problem.
    the secrets, run the workflow again with the same version (or leave the
    version blank). The workflow rebuilds a clean package from the reviewed
    commit and retries WordPress.org without changing release metadata.
+
+The deploy step turns a failed trunk commit or tag copy into an explicit GitHub
+Actions annotation with these instructions. It deliberately does not use
+`--force-interactive`: hosted runners cannot answer an SVN password prompt, and
+interactive prompting would not make a rejected password valid.
 
 The last point is important because the shared workflow creates the release
 commit and Git tag before its SVN deployment step. After a late authentication

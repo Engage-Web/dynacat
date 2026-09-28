@@ -187,7 +187,10 @@ jobs:
               svn rm --force "$path"
             done
             if [[ -n "$(svn status)" ]]; then
-              svn commit "${auth[@]}" -m "Release DynaCat $VERSION"
+              if ! svn commit "${auth[@]}" -m "Release DynaCat $VERSION"; then
+                echo '::error title=WordPress.org rejected the SVN credentials::The secrets are present, but WordPress.org did not accept them. Replace SVN_USERNAME with the WordPress.org login (not an email address) and SVN_PASSWORD with that account’s SVN password, then retry the same version.'
+                exit 1
+              fi
             else
               echo 'WordPress.org trunk is already current.'
             fi
@@ -195,5 +198,8 @@ jobs:
           if svn info "$SVN_URL/tags/$VERSION" >/dev/null 2>&1; then
             echo "WordPress.org tag $VERSION already exists; leaving it unchanged."
           else
-            svn copy "$SVN_URL/trunk" "$SVN_URL/tags/$VERSION" "${auth[@]}" -m "Tag DynaCat $VERSION"
+            if ! svn copy "$SVN_URL/trunk" "$SVN_URL/tags/$VERSION" "${auth[@]}" -m "Tag DynaCat $VERSION"; then
+              echo '::error title=WordPress.org rejected the SVN credentials::The secrets are present, but WordPress.org did not accept them. Replace SVN_USERNAME with the WordPress.org login (not an email address) and SVN_PASSWORD with that account’s SVN password, then retry the same version.'
+              exit 1
+            fi
           fi
