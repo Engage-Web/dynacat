@@ -35,11 +35,19 @@ credential to the workflow file or commit it to Git.
 
 1. Open **Actions → Engage Web Plugin Maintenance → Run workflow**.
 2. Select `main` in **Use workflow from**.
-3. Enter the new plugin version in **New plugin version**.
+3. Enter the new plugin version in **New version**.
 4. Select **Test, version, tag, and deploy this release to WordPress.org**.
 5. Select **Run workflow** and review every job result.
 
-The workflow installs the test dependencies, starts the latest stable WordPress,
+The workflow first reads the current version directly from the plugin header and
+shows it in the run summary next to the requested release version. GitHub does
+not support dynamically populating a `workflow_dispatch` text box from a
+repository file, so the input deliberately has no hard-coded default. To check
+the current version without releasing, leave the version blank and leave the
+confirmation option disabled; the current-version job will still produce the
+summary while the release job remains skipped.
+
+The shared workflow installs the test dependencies, starts the latest stable WordPress,
 runs the functional tests, and reads that installation's WordPress version. Once
 the tests pass, it sets `Version` and `Stable tag` to the requested plugin
 version, sets `Tested up to` to the tested WordPress major/minor version, and adds
@@ -61,7 +69,13 @@ Any failure stops later steps, so a failed compatibility test cannot update
 metadata or deploy.
 
 The workflow only runs its release job from `main`, and the confirmation checkbox
-must be selected. It cannot be used as a check-only workflow.
+must be selected. Its current-version preview does not publish anything.
+
+The release implementation remains in the central
+`Engage-Web/github-actions` repository. DynaCat supplies only its slug, plugin
+file, display name, requested version, and test profile. Other Engage Web plugin
+repositories continue to call the same reusable workflow with their own values,
+so release fixes and checks can be maintained once for all participating plugins.
 
 ## Verify the release
 

@@ -4,8 +4,8 @@ on:
   workflow_dispatch:
     inputs:
       release_version:
-        description: New plugin version (for example, 1.34)
-        required: true
+        description: New version (leave blank with confirmation off to view current)
+        required: false
         type: string
       confirm_release:
         description: Test, version, tag, and deploy this release to WordPress.org
@@ -21,8 +21,42 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  current-version:
+    name: Show current plugin version
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.plugin.outputs.version }}
+    steps:
+      - name: Checkout plugin
+        uses: actions/checkout@v4
+
+      - name: Read current plugin version
+        id: plugin
+        shell: bash
+        env:
+          REQUESTED_VERSION: ${{ inputs.release_version }}
+        run: |
+          version="$(sed -n 's/^ \* Version: \([^[:space:]]*\).*$/\1/p' dynacat-plugin.php | head -1)"
+          if [[ -z "$version" ]]; then
+            echo 'Could not read the Version header from dynacat-plugin.php.' >&2
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          {
+            echo '## DynaCat release versions'
+            echo
+            echo "Current reviewed version: **$version**"
+            if [[ -n "$REQUESTED_VERSION" ]]; then
+              echo "Requested release version: **$REQUESTED_VERSION**"
+            else
+              echo 'No release version was requested; this is a preview only.'
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
   release:
     name: Check and prepare release
+    needs: current-version
     if: github.ref == 'refs/heads/main' && inputs.confirm_release
     uses: Engage-Web/github-actions/.github/workflows/wordpress-plugin-release.yml@main
     with:
