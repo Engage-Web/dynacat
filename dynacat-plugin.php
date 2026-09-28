@@ -50,15 +50,18 @@ function dynacat_ajax_check_cat() {
 
 	$results = array();
 	foreach ( $categories as $category ) {
-		$parent = get_category_parents( $category->term_id, false, ' &raquo; ' );
-		if ( is_wp_error( $parent ) || $parent === $category->name ) {
-			$parent = '';
+		$parent_path = '';
+		if ( $category->parent ) {
+			$parent_path = get_category_parents( $category->parent, false, ' » ' );
+			if ( is_wp_error( $parent_path ) ) {
+				$parent_path = '';
+			}
 		}
 
 		$results[] = array(
 			'id'    => $category->term_id,
 			'name'  => $category->name,
-			'label' => wp_specialchars_decode( $parent . $category->name, ENT_QUOTES ),
+			'label' => wp_specialchars_decode( $parent_path . $category->name, ENT_QUOTES ),
 		);
 	}
 
