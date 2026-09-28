@@ -35,8 +35,11 @@ jobs:
         id: plugin
         shell: bash
         env:
+          CONFIRM_RELEASE: ${{ inputs.confirm_release }}
           REQUESTED_VERSION: ${{ inputs.release_version }}
         run: |
+          set -euo pipefail
+
           version="$(sed -n 's/^ \* Version: \([^[:space:]]*\).*$/\1/p' dynacat-plugin.php | head -1)"
           if [[ -z "$version" ]]; then
             echo 'Could not read the Version header from dynacat-plugin.php.' >&2
@@ -53,6 +56,18 @@ jobs:
               echo 'No release version was requested; this is a preview only.'
             fi
           } >> "$GITHUB_STEP_SUMMARY"
+
+          if [[ "$CONFIRM_RELEASE" != 'true' ]]; then
+            exit 0
+          fi
+          if [[ ! "$REQUESTED_VERSION" =~ ^[0-9]+\.[0-9]+(\.[0-9]+)?$ ]]; then
+            echo '::error title=Invalid release version::Enter a version with two or three numeric components, such as 1.41 or 1.41.1.'
+            exit 1
+          fi
+          if ! php -r 'exit(version_compare($argv[1], $argv[2], ">") ? 0 : 1);' "$REQUESTED_VERSION" "$version"; then
+            echo "::error title=Release version must be newer::Requested ${REQUESTED_VERSION}, but the current reviewed version is ${version}. Choose a version greater than ${version}."
+            exit 1
+          fi
 
   release:
     name: Check and prepare release
