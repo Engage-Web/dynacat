@@ -83,6 +83,16 @@ instead of failing while processing thousands of individually missing paths.
 Any failure stops later steps, so a failed compatibility test cannot update
 metadata or deploy.
 
+For the deploy-existing recovery path, a successful SVN commit is no longer the
+last check. The workflow reads the plugin version and stable tag back from the
+public SVN tag, then polls the WordPress.org Plugins API for up to ten minutes.
+The job succeeds only when the directory advertises the intended version. This
+distinguishes a completed release from an accepted SVN commit whose asynchronous
+directory processing is delayed or stuck. If the verification times out, do not
+create another version or overwrite the existing tag: check the plugin's
+WordPress.org **Developers** log and contact `plugins@wordpress.org` if the
+correct SVN tag remains unpublished.
+
 ### Recover from an SVN authentication failure
 
 The messages `E215004: Authentication failed` and `E215004: No more
@@ -152,7 +162,9 @@ so release fixes and checks can be maintained once for all participating plugins
 
 After a successful workflow run:
 
-1. Review the workflow log for the WordPress.org SVN revision and tag.
+1. Review the workflow log for the WordPress.org SVN revision and tag, and make
+   sure **Verify WordPress.org release** confirms that the public Plugins API
+   advertises the intended version.
 2. Check the public DynaCat page and download package on WordPress.org after its
    caches update.
 3. Install the published package on a clean WordPress site and confirm that it

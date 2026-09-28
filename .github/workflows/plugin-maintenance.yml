@@ -203,3 +203,62 @@ jobs:
               exit 1
             fi
           fi
+
+      - name: Verify WordPress.org release
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          remote_version="$(
+            svn cat "$SVN_URL/tags/$VERSION/dynacat-plugin.php" |
+              sed -n 's/^ \* Version: \([^[:space:]]*\).*$/\1/p' |
+              head -1
+          )"
+          remote_stable_tag="$(
+            svn cat "$SVN_URL/tags/$VERSION/readme.txt" |
+              sed -n 's/^Stable tag: *//p' |
+              head -1
+          )"
+          [[ "$remote_version" == "$VERSION" ]] || {
+            echo "::error title=Incorrect WordPress.org tag::Tag ${VERSION} contains plugin version ${remote_version:-<missing>}."
+            exit 1
+          }
+          [[ "$remote_stable_tag" == "$VERSION" ]] || {
+            echo "::error title=Incorrect WordPress.org stable tag::Tag ${VERSION} contains Stable tag ${remote_stable_tag:-<missing>}."
+            exit 1
+          }
+
+          # The SVN commit hook updates the public directory asynchronously. Do
+          # not report a successful release until its API advertises this tag.
+          for attempt in {1..20}; do
+            response="$(
+              curl --fail --silent --show-error --get \
+                --data-urlencode 'action=plugin_information' \
+                --data-urlencode 'request[slug]=dynacat' \
+                'https://api.wordpress.org/plugins/info/1.2/' || true
+            )"
+            published_version="$(
+              RESPONSE="$response" php -r '
+                $plugin = json_decode( getenv( "RESPONSE" ) );
+                if ( is_object( $plugin ) && isset( $plugin->version ) ) {
+                  echo $plugin->version;
+                }
+              '
+            )"
+            if [[ "$published_version" == "$VERSION" ]]; then
+              {
+                echo '## WordPress.org publication verified'
+                echo
+                echo "The public plugin API now advertises DynaCat **$VERSION**."
+              } >> "$GITHUB_STEP_SUMMARY"
+              exit 0
+            fi
+
+            echo "WordPress.org still advertises ${published_version:-an unknown version}; waiting for ${VERSION} (attempt ${attempt}/20)."
+            if [[ "$attempt" -lt 20 ]]; then
+              sleep 30
+            fi
+          done
+
+          echo "::error title=WordPress.org did not publish the release::SVN tag ${VERSION} is correct, but the public plugin API still advertises ${published_version:-an unknown version} after 10 minutes. Check the WordPress.org plugin Developers log and contact plugins@wordpress.org if processing does not resume."
+          exit 1
