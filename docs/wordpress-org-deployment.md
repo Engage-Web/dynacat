@@ -39,16 +39,18 @@ with the right name but without access is unavailable to this workflow.
 
 1. Make any plugin changes in a pull request, obtain approval, and merge them to
    `main`.
-2. Choose the next plugin version. It must be greater than the current `Version`
-   and must not already exist as a Git or WordPress.org SVN tag.
-3. Do not edit `Version`, `Stable tag`, `Tested up to`, or the changelog manually;
-   the workflow updates them only after the compatibility tests pass.
+2. Choose the intended plugin version. If reviewed plugin files already contain
+   that version, the workflow deploys them directly without forcing another
+   version bump.
+3. For a new version, let the workflow update `Version`, `Stable tag`, `Tested
+   up to`, and the changelog after the compatibility tests pass.
 
 ## Validate and deploy
 
 1. Open **Actions → Engage Web Plugin Maintenance → Run workflow**.
 2. Select `main` in **Use workflow from**.
-3. Enter the new plugin version in **New version**.
+3. Enter the version in **Version to deploy**, or leave it blank to use the
+   version already present in the plugin header.
 4. Select **Test, version, tag, and deploy this release to WordPress.org**.
 5. Select **Run workflow** and review every job result.
 
@@ -97,15 +99,16 @@ credentials; rerunning the same values cannot repair the problem.
 4. If either value comes from an organisation secret, confirm that `dynacat` is
    an allowed repository. A repository secret with the same name takes
    precedence, so remove or update any stale repository-level copy.
-5. Do not start another release merely to test the credentials. Ask a maintainer
-   of the shared `Engage-Web/github-actions` release workflow to resume the
-   failed WordPress.org deployment from the already-built artifact.
+5. Do not invent another version merely to retry the credentials. After fixing
+   the secrets, run the workflow again with the same version (or leave the
+   version blank). The workflow rebuilds a clean package from the reviewed
+   commit and retries WordPress.org without changing release metadata.
 
 The last point is important because the shared workflow creates the release
 commit and Git tag before its SVN deployment step. After a late authentication
 failure, the plugin header and Git history may already contain the requested
-version even though WordPress.org does not. The normal release entry point
-intentionally rejects that same version as "not newer"; incrementing the
+version even though WordPress.org does not. The workflow recognizes that same
+version and selects its idempotent deploy-existing path; incrementing the
 version would hide the incomplete deployment rather than fix it. Verify the
 GitHub run's **Commit and tag checked release** step and WordPress.org before
 choosing a recovery path.
@@ -114,10 +117,15 @@ The workflow only runs its release job from `main`, and the confirmation checkbo
 must be selected. Its current-version preview does not publish anything.
 
 When confirmation is selected, the caller checks the requested version before it
-starts the shared release job. The version must have two or three numeric
-components and must be greater than the version currently in the plugin header.
-For example, after `1.40` has been released, rerun with `1.41` (or a later
-version), not `1.40`. This early check also prevents the shared workflow's
+starts a release job. The version must have two or three numeric components and
+must not be older than the version currently in the plugin header. A newer
+version uses the shared test-and-prepare workflow. The current version uses a
+local deploy-only job: it validates matching metadata, syntax-checks every PHP
+file, runs the functional suite against latest stable WordPress, creates a clean
+package, runs WordPress Plugin Check, synchronizes SVN trunk, commits only when
+files changed, and creates the version tag only when it is absent. That path supports
+both a late SVN failure retry and reviewed changes whose version was bumped in
+advance. This early check also prevents the shared workflow's
 always-run WordPress cleanup from producing a secondary `wp-env: not found`
 message when release validation stops the job before Node dependencies are
 installed. In older runs that show both errors, expand **Validate release** to

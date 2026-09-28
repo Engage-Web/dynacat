@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       release_version:
-        description: New version (leave blank with confirmation off to view current)
+        description: Version to deploy (blank uses the version already in the plugin)
         required: false
         type: string
       confirm_release:
@@ -27,6 +27,8 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.plugin.outputs.version }}
+      requested_version: ${{ steps.plugin.outputs.requested_version }}
+      release_kind: ${{ steps.plugin.outputs.release_kind }}
     steps:
       - name: Checkout plugin
         uses: actions/checkout@v4
@@ -46,12 +48,16 @@ jobs:
             exit 1
           fi
           echo "version=$version" >> "$GITHUB_OUTPUT"
+          requested_version="${REQUESTED_VERSION:-$version}"
+          echo "requested_version=$requested_version" >> "$GITHUB_OUTPUT"
           {
             echo '## DynaCat release versions'
             echo
             echo "Current reviewed version: **$version**"
             if [[ -n "$REQUESTED_VERSION" ]]; then
-              echo "Requested release version: **$REQUESTED_VERSION**"
+              echo "Requested release version: **$requested_version**"
+            elif [[ "$CONFIRM_RELEASE" == 'true' ]]; then
+              echo "Version to deploy: **$requested_version** (from the plugin header)"
             else
               echo 'No release version was requested; this is a preview only.'
             fi
@@ -60,25 +66,32 @@ jobs:
           if [[ "$CONFIRM_RELEASE" != 'true' ]]; then
             exit 0
           fi
-          if [[ ! "$REQUESTED_VERSION" =~ ^[0-9]+\.[0-9]+(\.[0-9]+)?$ ]]; then
+          if [[ ! "$requested_version" =~ ^[0-9]+\.[0-9]+(\.[0-9]+)?$ ]]; then
             echo '::error title=Invalid release version::Enter a version with two or three numeric components, such as 1.41 or 1.41.1.'
             exit 1
           fi
-          if ! php -r 'exit(version_compare($argv[1], $argv[2], ">") ? 0 : 1);' "$REQUESTED_VERSION" "$version"; then
-            echo "::error title=Release version must be newer::Requested ${REQUESTED_VERSION}, but the current reviewed version is ${version}. Choose a version greater than ${version}."
+          comparison="$(php -r 'echo version_compare($argv[1], $argv[2]);' "$requested_version" "$version")"
+          if [[ "$comparison" == '-1' ]]; then
+            echo "::error title=Release version is older::Requested ${requested_version}, but the plugin is already ${version}."
             exit 1
+          fi
+          if [[ "$comparison" == '0' ]]; then
+            echo 'release_kind=existing' >> "$GITHUB_OUTPUT"
+            echo 'The existing, already-versioned plugin will be deployed without another version bump.' >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo 'release_kind=new' >> "$GITHUB_OUTPUT"
           fi
 
   release:
     name: Check and prepare release
     needs: current-version
-    if: github.ref == 'refs/heads/main' && inputs.confirm_release
+    if: github.ref == 'refs/heads/main' && inputs.confirm_release && needs.current-version.outputs.release_kind == 'new'
     uses: Engage-Web/github-actions/.github/workflows/wordpress-plugin-release.yml@main
     with:
       plugin_slug: dynacat
       plugin_file: dynacat-plugin.php
       plugin_name: DynaCat
-      release_version: ${{ inputs.release_version }}
+      release_version: ${{ needs.current-version.outputs.requested_version }}
       profile: dynacat
     # Forward the repository credentials under the exact names declared by the
     # reusable workflow. `inherit` can silently omit secrets when this caller or
@@ -86,3 +99,87 @@ jobs:
     secrets:
       SVN_USERNAME: ${{ secrets.SVN_USERNAME }}
       SVN_PASSWORD: ${{ secrets.SVN_PASSWORD }}
+
+  deploy-existing:
+    name: Deploy already-versioned plugin
+    needs: current-version
+    if: github.ref == 'refs/heads/main' && inputs.confirm_release && needs.current-version.outputs.release_kind == 'existing'
+    runs-on: ubuntu-latest
+    env:
+      SVN_USERNAME: ${{ secrets.SVN_USERNAME }}
+      SVN_PASSWORD: ${{ secrets.SVN_PASSWORD }}
+      VERSION: ${{ needs.current-version.outputs.requested_version }}
+      SVN_URL: https://plugins.svn.wordpress.org/dynacat
+    steps:
+      - name: Checkout reviewed plugin
+        uses: actions/checkout@v4
+
+      - name: Validate deployment inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ -n "$SVN_USERNAME" ]] || { echo '::error title=Missing SVN username::Set the SVN_USERNAME Actions secret.'; exit 1; }
+          [[ -n "$SVN_PASSWORD" ]] || { echo '::error title=Missing SVN password::Set the SVN_PASSWORD Actions secret.'; exit 1; }
+          stable_tag="$(sed -n 's/^Stable tag: *//p' readme.txt | head -1)"
+          [[ "$stable_tag" == "$VERSION" ]] || { echo "::error title=Version mismatch::Plugin version is ${VERSION}, but readme Stable tag is ${stable_tag}."; exit 1; }
+
+      - name: Run PHP syntax checks
+        shell: bash
+        run: find . -path './node_modules' -prune -o -name '*.php' -print0 | xargs -0 -n1 php -l
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install test dependencies
+        run: npm ci
+
+      - name: Start latest stable WordPress
+        run: npm run env:start
+
+      - name: Test plugin functionality
+        run: npm test
+
+      - name: Stop WordPress
+        if: always()
+        run: npm run env:stop
+
+      - name: Build clean deployment package
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p build/package
+          rsync -a --delete-excluded --exclude-from=.distignore ./ build/package/
+          test ! -e build/package/node_modules
+
+      - name: Run WordPress Plugin Check
+        uses: wordpress/plugin-check-action@v1
+        with:
+          build-dir: build/package
+
+      - name: Deploy trunk and version tag to WordPress.org
+        shell: bash
+        run: |
+          set -euo pipefail
+          auth=(--username "$SVN_USERNAME" --password "$SVN_PASSWORD" --non-interactive --no-auth-cache)
+          svn checkout "$SVN_URL/trunk" wordpress-svn/trunk "${auth[@]}"
+          rsync -a --delete --exclude=.svn/ build/package/ wordpress-svn/trunk/
+          (
+            cd wordpress-svn/trunk
+            svn add --force . --auto-props --parents >/dev/null
+            svn status | awk '$1 == "!" { sub(/^! +/, ""); print }' | while IFS= read -r path; do
+              svn rm --force "$path"
+            done
+            if [[ -n "$(svn status)" ]]; then
+              svn commit "${auth[@]}" -m "Release DynaCat $VERSION"
+            else
+              echo 'WordPress.org trunk is already current.'
+            fi
+          )
+          if svn info "$SVN_URL/tags/$VERSION" >/dev/null 2>&1; then
+            echo "WordPress.org tag $VERSION already exists; leaving it unchanged."
+          else
+            svn copy "$SVN_URL/trunk" "$SVN_URL/tags/$VERSION" "${auth[@]}" -m "Tag DynaCat $VERSION"
+          fi
