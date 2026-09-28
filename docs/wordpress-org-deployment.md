@@ -12,7 +12,10 @@ installable ZIP, and deploys the same package to WordPress.org.
 2. In the GitHub repository, open **Settings → Secrets and variables → Actions**
    and add these repository secrets:
    - `SVN_USERNAME`: the WordPress.org username with commit access.
-   - `SVN_PASSWORD`: that account's WordPress.org password (not a WordPress application password).
+   - `SVN_PASSWORD`: the account's WordPress.org SVN password. For an account
+     with two-factor authentication enabled, generate the SVN password from the
+     account's WordPress.org profile. Do not use a WordPress site application
+     password or a GitHub token.
 3. Keep the plugin slug as `dynacat`. The workflow publishes to that
    WordPress.org SVN repository.
 4. Ensure GitHub Actions has permission to write repository contents and that
@@ -25,6 +28,12 @@ repository or organisation secrets; secrets saved only for Codespaces,
 Dependabot, or a GitHub environment are not available to this reusable workflow.
 The caller explicitly maps both secret names to the shared release workflow so a
 missing or renamed credential cannot be obscured by blanket secret inheritance.
+
+Changing a secret's value does not require a code change or a new pull request.
+GitHub never shows the stored value again, so re-enter both secrets rather than
+assuming that an existing entry is current. If organisation secrets are used,
+also confirm that their repository access policy includes `dynacat`; a secret
+with the right name but without access is unavailable to this workflow.
 
 ## Prepare a release
 
@@ -71,6 +80,35 @@ exists in the working copy, so Subversion can remove the directory as one tree
 instead of failing while processing thousands of individually missing paths.
 Any failure stops later steps, so a failed compatibility test cannot update
 metadata or deploy.
+
+### Recover from an SVN authentication failure
+
+The messages `E215004: Authentication failed` and `E215004: No more
+credentials or we tried too many times` come from WordPress.org's SVN server.
+They mean that the deployment reached WordPress.org but it rejected the supplied
+credentials; rerunning the same values cannot repair the problem.
+
+1. Confirm that `SVN_USERNAME` is the WordPress.org **username**, not the
+   account's email address or display name.
+2. Confirm on the plugin's WordPress.org **Advanced View** that this username is
+   listed as a committer.
+3. Generate or reset the account's WordPress.org SVN password, then re-enter
+   `SVN_USERNAME` and `SVN_PASSWORD` in the GitHub Actions repository secrets.
+4. If either value comes from an organisation secret, confirm that `dynacat` is
+   an allowed repository. A repository secret with the same name takes
+   precedence, so remove or update any stale repository-level copy.
+5. Do not start another release merely to test the credentials. Ask a maintainer
+   of the shared `Engage-Web/github-actions` release workflow to resume the
+   failed WordPress.org deployment from the already-built artifact.
+
+The last point is important because the shared workflow creates the release
+commit and Git tag before its SVN deployment step. After a late authentication
+failure, the plugin header and Git history may already contain the requested
+version even though WordPress.org does not. The normal release entry point
+intentionally rejects that same version as "not newer"; incrementing the
+version would hide the incomplete deployment rather than fix it. Verify the
+GitHub run's **Commit and tag checked release** step and WordPress.org before
+choosing a recovery path.
 
 The workflow only runs its release job from `main`, and the confirmation checkbox
 must be selected. Its current-version preview does not publish anything.
