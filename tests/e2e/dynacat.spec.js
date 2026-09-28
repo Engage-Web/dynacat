@@ -83,6 +83,7 @@ test( 'searches for and retains a selected category', async ( { page } ) => {
 		hasText: childName,
 	} );
 	await expect( matchingCategory ).toBeVisible();
+	await expect( matchingCategory ).toHaveText( `${ parentName } » ${ childName }` );
 	await expect( page.locator( '#categorydiv .catlink', { hasText: otherName } ) ).toHaveCount( 0 );
 	await matchingCategory.click();
 	await expect( page.locator( '#categorydiv #post_category' ) ).toHaveValue(
